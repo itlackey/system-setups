@@ -116,3 +116,7 @@
         scope: global
         value: "{{ username }}"
       become: no
+    - name: connect storage explorer to keyring
+      command:
+        cmd: snap connect storage-explorer:password-manager-service :password-manager-service
+      become: yes
