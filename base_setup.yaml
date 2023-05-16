@@ -78,10 +78,31 @@
           - containerd.io
         state: present
 
+    - name: Check if VSCode is installed
+      ansible.builtin.command: which code
+      register: code_check
+      changed_when: not code_check.stdout
+      ignore_errors: yes
+
     - name: Install VSCode
       ansible.builtin.apt:
         deb: https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64
         state: present
+      when: code_check.changed
+
+    - name: Check if Azure CLI is installed
+      ansible.builtin.command: which az
+      register: azcli_check
+      changed_when: not code_check.stdout
+      ignore_errors: yes
+
+    - name: Download Azure CLI installation script
+      ansible.builtin.shell: curl -sL https://aka.ms/InstallAzureCLIDeb -o /tmp/install_azure_cli.sh
+      when: azcli_check.changed
+
+    - name: Install Azure CLI
+      ansible.builtin.shell: sudo bash /tmp/install_azure_cli.sh
+      when: azcli_check.changed
 
     - name: Install .NET SDK
       apt:
@@ -89,10 +110,17 @@
         state: present
         update_cache: yes
 
+    - name: Check if Zoom is installed
+      ansible.builtin.command: which zoom
+      register: zoom_check
+      changed_when: not zoom_check.stdout
+      ignore_errors: yes
+
     - name: Install Zoom
       apt:
         deb: https://zoom.us/client/latest/zoom_amd64.deb
         state: present
+      when: zoom_check.changed
 
     - name: Add current user to docker group
       user:
@@ -106,17 +134,39 @@
           - postman
           - storage-explorer
 
-    - git_config:
-        name: user.email
-        scope: global
-        value: "{{ email }}"
-      become: no
-    - community.general.git_config:
-        name: "user.name"
-        scope: global
-        value: "{{ username }}"
-      become: no
+    - name: Check storage explorer connection status
+      ansible.builtin.command: "snap connections 'storage-explorer'"
+      register: connection_status
+      changed_when: not connection_status.stdout
+
     - name: connect storage explorer to keyring
       command:
         cmd: snap connect storage-explorer:password-manager-service :password-manager-service
       become: yes
+      when: not 'storage-explorer:password-manager-service' in connection_status.stdout
+
+    - name: Check if user email is already set
+      git_config:
+        name: user.email
+        scope: global
+      register: email_config
+
+    - name: Check if user name is already set
+      git_config:
+        name: user.name
+        scope: global
+      register: name_config
+
+    - name: Set user email
+      git_config:
+        name: user.email
+        scope: global
+        value: "{{ email }}"
+      when: not email_config.config_value
+
+    - name: Set user name
+      community.general.git_config:
+        name: "user.name"
+        scope: global
+        value: "{{ username }}"
+      when: not name_config.config_value
