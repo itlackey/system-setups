@@ -133,6 +133,7 @@
         name:
           - postman
           - storage-explorer
+          - drawio
 
     - name: Check storage explorer connection status
       ansible.builtin.command: "snap connections 'storage-explorer'"
