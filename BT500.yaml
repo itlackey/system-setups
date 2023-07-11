@@ -1,0 +1,64 @@
+---
+- name: Base setup for ubuntu system
+  hosts: localhost
+  become: yes
+  gather_facts: true
+  vars_files:
+    - ./vars.yml
+  vars:
+    url_to_driver: "https://dlcdnets.asus.com/pub/ASUS/wireless/USB-BT500/20200909_LINUX_BT_DRIVER_KERNEL_5.7_COEX_v0202.zip?model=USB-BT500"
+    driver_path: "/tmp/temp_asus_driver/20200806_LINUX_BT_DRIVER_RTL8761B_COEX_v0202/20200806_LINUX_BT_DRIVER_RTL8761B_COEX_v0202/"
+
+  tasks:
+
+    - name: Check if the system recognizes the adapter
+      shell: lsusb | grep USB-BT500
+      ignore_errors: yes
+      register: grep_output
+
+    - name: Fail if system doesn't recognize the adapter
+      fail:
+        msg: "System doesn't recognize the adapter. Try connecting it to a different USB port."
+      when: grep_output.stdout == ""
+
+    - name: Create a temporary directory & navigate into it
+      file:
+        path: /tmp/temp_asus_driver
+        state: directory
+
+    - name: Use curl to download the driver and save it as driver.zip
+      unarchive:
+        src: "{{ url_to_driver }}"
+        dest: /tmp/temp_asus_driver
+        remote_src: yes
+
+    - name: Install the dependencies
+      apt:
+        name: "{{ item }}"
+        update_cache: yes
+      loop:
+        - build-essential
+        - "linux-headers-$(uname -r)"
+    
+    - name: Build and install the driver
+      make:
+        chdir: "{{ driver_path }}"
+        target: install
+
+    - name: Restart the Bluetooth service
+      systemd:
+        state: restarted
+        name: bluetooth
+
+    - name: Check for error messages
+      shell: hciconfig -a; dmesg | egrep -i 'blue|firm'
+      ignore_errors: yes
+      register: error_messages
+    
+    - debug:
+        var: error_messages.stdout_lines
+
+    - name: Remove the temporary directory
+      file:
+        path: /tmp/temp_asus_driver
+        state: absent
